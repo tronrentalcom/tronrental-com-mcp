@@ -1,0 +1,29 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.tronrental-com/tronrental",
+  "description": "Buy TRON energy to reduce USDT transfer fees by 80%. Full API for AI agents.",
+  "repository": {
+    "url": "https://github.com/tronrentalcom/tronrental-com-mcp",
+    "source": "github"
+  },
+  "version": "1.0.2",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@tronrental-com/mcp-server",
+      "version": "1.0.2",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "TronRental API key (optional — register via tool if not provided)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true,
+          "name": "TRONRENTAL_API_KEY"
+        }
+      ]
+    }
+  ]
+}
