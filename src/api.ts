@@ -16,14 +16,19 @@ export class TronRentalAPI {
     method: string,
     path: string,
     body?: Record<string, unknown>,
-    auth: "none" | "token" | "key" = "key"
+    auth: "none" | "token" | "auto" = "auto"
   ): Promise<T> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
 
-    if (auth === "key" && this.apiKey) {
-      headers["Authorization"] = `Bearer ${this.apiKey}`;
+    if (auth === "auto") {
+      // Prefer API key, fall back to access token
+      if (this.apiKey) {
+        headers["Authorization"] = `Bearer ${this.apiKey}`;
+      } else if (this.accessToken) {
+        headers["Authorization"] = `Bearer ${this.accessToken}`;
+      }
     } else if (auth === "token" && this.accessToken) {
       headers["Authorization"] = `Bearer ${this.accessToken}`;
     }
