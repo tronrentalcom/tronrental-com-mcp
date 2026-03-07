@@ -1,5 +1,5 @@
 {
-  "name": "@tronrental/mcp-server",
+  "name": "@tronrental-com/mcp-server",
   "version": "1.0.0",
   "description": "MCP server for TronRental.com — buy TRON energy via AI agents",
   "main": "dist/index.js",

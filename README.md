@@ -14,13 +14,13 @@ This MCP server lets AI agents (Claude Code, Cursor, Windsurf) interact with the
 ### Claude Code
 
 ```bash
-claude mcp add tronrental -- npx -y @tronrental/mcp-server
+claude mcp add tronrental -- npx -y @tronrental-com/mcp-server
 ```
 
 ### With API key (skip registration)
 
 ```bash
-claude mcp add tronrental -e TRONRENTAL_API_KEY=your_key -- npx -y @tronrental/mcp-server
+claude mcp add tronrental -e TRONRENTAL_API_KEY=your_key -- npx -y @tronrental-com/mcp-server
 ```
 
 ### Claude Desktop
@@ -32,7 +32,7 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "tronrental": {
       "command": "npx",
-      "args": ["-y", "@tronrental/mcp-server"],
+      "args": ["-y", "@tronrental-com/mcp-server"],
       "env": {
         "TRONRENTAL_API_KEY": "your_key_here"
       }
