@@ -88,16 +88,14 @@ After showing results, ask the user if they want to proceed with buying energy.`
   async ({ monthly_transfers }) => {
     try {
       const prices = await api.getPrices() as Record<string, unknown>;
-      const energyPrices = prices.energy_prices as Record<string, unknown> | undefined;
+      const energyTrx = prices.energy_trx as Record<string, string> | undefined;
+      const burnCostTrx = prices.burn_cost_trx as string | undefined;
 
-      const burnCostPerTransfer = 6.43; // 64,285 energy × 100 SUN = 6.43 TRX
+      const burnCostPerTransfer = burnCostTrx ? Number(burnCostTrx) : 6.43;
       let rentalCostPerTransfer = 1.8; // fallback
 
-      if (energyPrices) {
-        const pricePerUnit = Number(energyPrices.price_sun ?? energyPrices.min_price_sun ?? 0);
-        if (pricePerUnit > 0) {
-          rentalCostPerTransfer = (pricePerUnit * 64285) / 1_000_000;
-        }
+      if (energyTrx?.["1h"]) {
+        rentalCostPerTransfer = Number(energyTrx["1h"]);
       }
 
       const burnTotal = burnCostPerTransfer * monthly_transfers;
