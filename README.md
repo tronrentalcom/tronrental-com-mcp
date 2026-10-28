@@ -75,7 +75,7 @@ Add to `claude_desktop_config.json`:
 | Recipient **has** USDT | 65,000 |
 | Recipient **has no** USDT | 131,000 |
 
-Minimum: 60,000. Maximum: 5,000,000. Duration: 1 hour.
+Minimum: 1. Maximum: 5,000,000. Duration: 1 hour. Orders under 32,000 are served from TronRental's own pool; `POOL_EXHAUSTED` means nothing was charged.
 
 ## Links
 

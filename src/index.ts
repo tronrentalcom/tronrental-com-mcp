@@ -57,7 +57,7 @@ Skip steps 3-5. Go directly to get_balance, then buy_energy.
 ## Energy amounts
 - 65,000 — for 1 USDT transfer (recipient already has USDT)
 - 131,000 — for 1 USDT transfer (recipient never held USDT, needs new storage slot)
-- Minimum: 60,000. Maximum: 5,000,000.
+- Minimum: 1. Maximum: 5,000,000. Orders under 32,000 come from TronRental's own pool: if it cannot serve the address right now, buy_energy fails with POOL_EXHAUSTED and nothing is charged — retry later or buy 32,000 or more.
 - Duration: always "1h" (energy is used within seconds, 1 hour is the rental window)`,
   }
 );
@@ -230,11 +230,12 @@ server.tool(
   "buy_energy",
   `Buy TRON energy for a target address. This is the core action — energy eliminates USDT transfer fees.
 Use 65,000 for addresses that already hold USDT, or 131,000 for addresses that have never held USDT.
-Minimum: 60,000. Maximum: 5,000,000. Duration is always "1h".
+Minimum: 1. Maximum: 5,000,000. Duration is always "1h".
+Under 32,000 the order is served from TronRental's own pool: POOL_EXHAUSTED means nothing was charged (retry later or buy 32,000+), and status "submitted_unknown" settles to "filled" or "failed" (refunded) within minutes.
 After purchase, call get_order to confirm the energy was delegated.`,
   {
     target_address: z.string().describe("TRON address to receive energy (starts with T, 34 chars)"),
-    volume: z.number().int().min(60000).max(5000000).describe("Energy amount: 65000 for 1 transfer (recipient has USDT), 131000 (recipient has no USDT)"),
+    volume: z.number().int().min(1).max(5000000).describe("Energy amount: 65000 for 1 transfer (recipient has USDT), 131000 (recipient has no USDT)"),
     duration: z.string().default("1h").describe("Rental duration — always use 1h"),
   },
   async ({ target_address, volume, duration }) => {
