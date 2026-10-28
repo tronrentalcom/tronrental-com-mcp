@@ -1,6 +1,6 @@
 {
   "name": "@tronrental-com/mcp-server",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "MCP server for TronRental.com — buy TRON energy via AI agents",
   "mcpName": "io.github.tronrental-com/tronrental",
   "repository": {
