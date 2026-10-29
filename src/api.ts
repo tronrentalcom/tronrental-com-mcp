@@ -62,28 +62,43 @@ export class TronRentalAPI {
 
   // --- Auth ---
 
+  // New addresses get no token here: the backend mails a 6-digit code and
+  // answers requires_email_code; the account is created by verifyEmailCode.
   async register(
     email: string,
     password: string,
     language = "en"
-  ): Promise<{ access_token: string; is_new: boolean }> {
-    const data = await this.request<{
-      access_token: string;
-      is_new: boolean;
-    }>("POST", "/auth/register", { email, password, language }, "none");
-    this.accessToken = data.access_token;
+  ): Promise<LoginResponse> {
+    const data = await this.request<LoginResponse>(
+      "POST", "/auth/register", { email, password, language }, "none"
+    );
+    if (data.access_token) this.accessToken = data.access_token;
     return data;
   }
 
-  async login(
+  async login(email: string, password: string): Promise<LoginResponse> {
+    const data = await this.request<LoginResponse>(
+      "POST", "/auth/login", { email, password }, "none"
+    );
+    if (data.access_token) this.accessToken = data.access_token;
+    return data;
+  }
+
+  async sendEmailCode(email: string, language = "en"): Promise<{ status: string }> {
+    return this.request("POST", "/auth/email-code/send", { email, language }, "none");
+  }
+
+  async verifyEmailCode(
     email: string,
-    password: string
-  ): Promise<{ access_token: string; requires_2fa: boolean }> {
-    const data = await this.request<{
-      access_token: string;
-      requires_2fa: boolean;
-    }>("POST", "/auth/login", { email, password }, "none");
-    this.accessToken = data.access_token;
+    code: string,
+    password?: string
+  ): Promise<LoginResponse> {
+    const body: Record<string, unknown> = { email, code };
+    if (password !== undefined) body.password = password;
+    const data = await this.request<LoginResponse>(
+      "POST", "/auth/email-code/verify", body, "none"
+    );
+    if (data.access_token) this.accessToken = data.access_token;
     return data;
   }
 
@@ -131,6 +146,13 @@ export class TronRentalAPI {
   async getOrder(orderId: number): Promise<Record<string, unknown>> {
     return this.request("GET", `/orders/${orderId}`);
   }
+}
+
+export interface LoginResponse {
+  access_token?: string | null;
+  requires_2fa?: boolean;
+  requires_email_code?: boolean;
+  is_new?: boolean;
 }
 
 export class APIError extends Error {

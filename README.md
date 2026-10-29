@@ -9,6 +9,8 @@ With TronRental energy, the same transfer costs ~1.8 TRX — **saving 72%**.
 
 This MCP server lets AI agents (Claude Code, Cursor, Windsurf) interact with the TronRental API to register, fund an account, and purchase energy — all from a single prompt.
 
+Registering a new account needs the user's real email: TronRental mails a 6-digit code there, and the account is created only after the agent passes that code to `verify_email_code`. The agent asks the user for the code — it is the only manual step.
+
 ## Quick Start
 
 ### Claude Code
@@ -47,7 +49,9 @@ Add to `claude_desktop_config.json`:
 |------|-------------|------|
 | `get_prices` | Current energy & bandwidth prices | No |
 | `calculate_savings` | Savings calculator (burn vs rental) | No |
-| `register` | Create a new account | No |
+| `register` | Start registration — mails a 6-digit code to the user's email | No |
+| `verify_email_code` | Confirm the code and create the account | No |
+| `resend_email_code` | Mail a new code (expired or not received) | No |
 | `login` | Log in to existing account | No |
 | `create_api_key` | Generate API key | Token |
 | `get_deposit_address` | Get TRX deposit address | API key |
@@ -60,13 +64,15 @@ Add to `claude_desktop_config.json`:
 
 1. `get_prices` — check current pricing
 2. `calculate_savings` — see how much you save
-3. `register` — create account
-4. `create_api_key` — get API key
-5. `get_deposit_address` — get address to fund account
-6. Send TRX to the deposit address
-7. `get_balance` — verify deposit arrived
-8. `buy_energy` — purchase energy for target address
-9. `get_order` — confirm delegation
+3. `register` — the user's real email + password; a 6-digit code goes to that inbox
+4. The user reads the code from the email and gives it to the agent
+5. `verify_email_code` — creates the account and signs in
+6. `create_api_key` — get API key
+7. `get_deposit_address` — get address to fund account
+8. Send TRX to the deposit address
+9. `get_balance` — verify deposit arrived
+10. `buy_energy` — purchase energy for target address
+11. `get_order` — confirm delegation
 
 ## Energy Amounts
 
