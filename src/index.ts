@@ -23,7 +23,7 @@ function ok(data: unknown) {
 const server = new McpServer(
   {
     name: "tronrental",
-    version: "1.0.3",
+    version: "1.0.7",
   },
   {
     capabilities: { tools: {} },
@@ -44,15 +44,17 @@ The rental cost is typically ~1.8 TRX — saving ~72% compared to burning.
 1. get_prices — show current energy pricing
 2. calculate_savings — calculate savings for the user's volume
 3. ASK the user: "Want to set this up? I can register an account and buy energy for your address."
-4. register — create account (ask user for email, or generate a test one)
-5. create_api_key — generate API key
-6. get_deposit_address — show TRX deposit address, ask user to send TRX
-7. get_balance — check if deposit arrived
-8. buy_energy — purchase energy for target address
-9. get_order — confirm delegation succeeded
+4. register — ASK the user for their real email (they must be able to read it) and a password. Never invent or generate an address: the account only exists after the code from that inbox is entered.
+5. ASK the user for the 6-digit code that TronRental sent to their email (valid 10 minutes)
+6. verify_email_code — creates the account and signs in
+7. create_api_key — generate API key
+8. get_deposit_address — show TRX deposit address, ask user to send TRX
+9. get_balance — check if deposit arrived
+10. buy_energy — purchase energy for target address
+11. get_order — confirm delegation succeeded
 
 ## Flow for users with API key (TRONRENTAL_API_KEY is set)
-Skip steps 3-5. Go directly to get_balance, then buy_energy.
+Skip steps 3-7. Go directly to get_balance, then buy_energy.
 
 ## Energy amounts
 - 65,000 — for 1 USDT transfer (recipient already has USDT)
@@ -119,23 +121,36 @@ After showing results, ask the user if they want to proceed with buying energy.`
   }
 );
 
+// Password given to register/login for an address that has no account yet.
+// The backend does not keep it next to the pending code (ADR-059): it has to
+// come back with the code at verify, so it stays here, in this process only.
+const pendingSignupPasswords = new Map<string, string>();
+const emailKey = (email: string) => email.trim().toLowerCase();
+
+const CODE_SENT_NEXT_STEP =
+  "A 6-digit confirmation code was sent to this email (valid 10 minutes). The account does not exist yet. Ask the user to check their inbox (and spam folder) and tell you the code, then call verify_email_code with the email and the code. If no mail arrives within a couple of minutes, call resend_email_code.";
+
 // 3. register
 server.tool(
   "register",
-  "Register a new TronRental account. Returns access token. Ask the user for their email, or suggest generating a temporary one. After registration, proceed to create_api_key.",
+  "Start registration of a new TronRental account. Requires the user's REAL email address — ask the user for it, never invent or generate one: TronRental mails a 6-digit code there and the account is created only when that code is passed to verify_email_code. Returns no token for a new address. If the email already has an account, use login instead.",
   {
-    email: z.string().email().describe("Email address for the account"),
+    email: z.string().email().describe("The user's own email address — they will need to read the confirmation code from it"),
     password: z.string().min(8).describe("Password (min 8 chars, must contain uppercase, lowercase, and digit)"),
-    language: z.string().length(2).default("en").describe("Language code (en, ru, zh, ko, etc.)"),
+    language: z.string().length(2).default("en").describe("Language of the confirmation email (en, ru, zh, ko, etc.)"),
   },
   async ({ email, password, language }) => {
     try {
       const result = await api.register(email, password, language);
-      return ok({
-        status: "registered",
-        access_token: result.access_token,
-        next_step: "Call create_api_key to generate an API key, then get_deposit_address to get the deposit address for funding.",
-      });
+      if (result.access_token) {
+        return ok({
+          status: "registered",
+          access_token: result.access_token,
+          next_step: "Call create_api_key to generate an API key, then get_deposit_address to get the deposit address for funding.",
+        });
+      }
+      pendingSignupPasswords.set(emailKey(email), password);
+      return ok({ status: "email_code_sent", email, next_step: CODE_SENT_NEXT_STEP });
     } catch (e) {
       return errorResult(e);
     }
@@ -145,7 +160,7 @@ server.tool(
 // 4. login
 server.tool(
   "login",
-  "Log in to an existing TronRental account. Returns access token.",
+  "Log in to an existing TronRental account. Returns access token. For an email that has no account yet this starts registration instead: a 6-digit code is mailed and the account is created by verify_email_code.",
   {
     email: z.string().email().describe("Account email"),
     password: z.string().describe("Account password"),
@@ -159,6 +174,10 @@ server.tool(
           note: "This account has 2FA enabled. The user must complete 2FA on the website at tronrental.com.",
         });
       }
+      if (result.requires_email_code) {
+        pendingSignupPasswords.set(emailKey(email), password);
+        return ok({ status: "email_code_sent", email, next_step: CODE_SENT_NEXT_STEP });
+      }
       return ok({
         status: "logged_in",
         access_token: result.access_token,
@@ -170,10 +189,69 @@ server.tool(
   }
 );
 
+// 4a. verify_email_code
+server.tool(
+  "verify_email_code",
+  "Finish registration with the 6-digit code from the confirmation email (sent by register). Creates the account with the password given to register and signs in. Ask the user for the code — do not guess: each address allows only 5 attempts per code. After success, proceed to create_api_key.",
+  {
+    email: z.string().email().describe("The same email that was passed to register"),
+    code: z.string().regex(/^\d{6}$/).describe("6-digit code from the email"),
+    password: z.string().optional().describe("Only needed if this MCP server was restarted after register: the same password that was given to register"),
+  },
+  async ({ email, code, password }) => {
+    try {
+      const pwd = password ?? pendingSignupPasswords.get(emailKey(email));
+      if (pwd === undefined) {
+        return {
+          content: [{ type: "text" as const, text: "No password for this email in this session. Pass the password that was given to register." }],
+          isError: true,
+        };
+      }
+      const result = await api.verifyEmailCode(email, code, pwd);
+      if (result.requires_2fa) {
+        return ok({
+          status: "2fa_required",
+          note: "This account has 2FA enabled. The user must complete 2FA on the website at tronrental.com.",
+        });
+      }
+      pendingSignupPasswords.delete(emailKey(email));
+      return ok({
+        status: result.is_new ? "registered" : "logged_in",
+        access_token: result.access_token,
+        next_step: "Email confirmed. Call create_api_key to generate an API key, then get_deposit_address to get the deposit address for funding.",
+      });
+    } catch (e) {
+      return errorResult(e);
+    }
+  }
+);
+
+// 4b. resend_email_code
+server.tool(
+  "resend_email_code",
+  "Send a new confirmation code to the email given to register (use when the code expired or did not arrive). The previous code stops working. Limited to 3 emails per hour per address.",
+  {
+    email: z.string().email().describe("The same email that was passed to register"),
+    language: z.string().length(2).default("en").describe("Language of the email (en, ru, zh, ko, etc.)"),
+  },
+  async ({ email, language }) => {
+    try {
+      await api.sendEmailCode(email, language);
+      return ok({
+        status: "email_code_sent",
+        email,
+        next_step: "Ask the user for the new 6-digit code from their inbox, then call verify_email_code.",
+      });
+    } catch (e) {
+      return errorResult(e);
+    }
+  }
+);
+
 // 5. create_api_key
 server.tool(
   "create_api_key",
-  "Create an API key for authenticated operations. Requires a valid access token from register or login. The key is shown only once — tell the user to save it. After creating, proceed to get_deposit_address.",
+  "Create an API key for authenticated operations. Requires a valid access token from verify_email_code or login. The key is shown only once — tell the user to save it. After creating, proceed to get_deposit_address.",
   {
     name: z.string().default("mcp-key").describe("Name for the API key"),
   },
