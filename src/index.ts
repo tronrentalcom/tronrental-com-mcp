@@ -23,7 +23,7 @@ function ok(data: unknown) {
 const server = new McpServer(
   {
     name: "tronrental",
-    version: "1.0.7",
+    version: "1.0.8",
   },
   {
     capabilities: { tools: {} },
@@ -46,15 +46,18 @@ The rental cost is typically ~1.8 TRX — saving ~72% compared to burning.
 3. ASK the user: "Want to set this up? I can register an account and buy energy for your address."
 4. register — ASK the user for their real email (they must be able to read it) and a password. Never invent or generate an address: the account only exists after the code from that inbox is entered.
 5. ASK the user for the 6-digit code that TronRental sent to their email (valid 10 minutes)
-6. verify_email_code — creates the account and signs in
-7. create_api_key — generate API key
-8. get_deposit_address — show TRX deposit address, ask user to send TRX
-9. get_balance — check if deposit arrived
-10. buy_energy — purchase energy for target address
-11. get_order — confirm delegation succeeded
+6. verify_email_code — creates the account and signs in. From here on the tools below work with this sign-in token: buying does not need an API key.
+7. get_deposit_address — show the deposit address, ask the user to send TRX or USDT
+8. get_balance — check if deposit arrived
+9. buy_energy — purchase energy for target address
+10. get_order — confirm delegation succeeded
+11. create_api_key — optional, and issued only once the account's top-ups total 100 TRX (a USDT top-up counts at its credited TRX amount). A key keeps access after this session: the user sets it as TRONRENTAL_API_KEY. Below 100 TRX it reports how much more to top up.
+
+## Sign-in token
+Without TRONRENTAL_API_KEY the tools use the sign-in token from verify_email_code or login. It is valid for 1 hour: if a call fails with TOKEN_EXPIRED or INVALID_TOKEN, call login with the same email and password.
 
 ## Flow for users with API key (TRONRENTAL_API_KEY is set)
-Skip steps 3-7. Go directly to get_balance, then buy_energy.
+Skip steps 3-6 and 11. Go directly to get_balance, then buy_energy.
 
 ## Energy amounts
 - 65,000 — for 1 USDT transfer (recipient already has USDT)
@@ -127,6 +130,9 @@ After showing results, ask the user if they want to proceed with buying energy.`
 const pendingSignupPasswords = new Map<string, string>();
 const emailKey = (email: string) => email.trim().toLowerCase();
 
+const NEXT_AFTER_SIGN_UP =
+  "Call get_deposit_address to get the deposit address for funding; get_balance, buy_energy and get_order work with this sign-in token. An API key (create_api_key) is issued once the account's top-ups total 100 TRX.";
+
 const CODE_SENT_NEXT_STEP =
   "A 6-digit confirmation code was sent to this email (valid 10 minutes). The account does not exist yet. Ask the user to check their inbox (and spam folder) and tell you the code, then call verify_email_code with the email and the code. If no mail arrives within a couple of minutes, call resend_email_code.";
 
@@ -146,7 +152,7 @@ server.tool(
         return ok({
           status: "registered",
           access_token: result.access_token,
-          next_step: "Call create_api_key to generate an API key, then get_deposit_address to get the deposit address for funding.",
+          next_step: NEXT_AFTER_SIGN_UP,
         });
       }
       pendingSignupPasswords.set(emailKey(email), password);
@@ -181,7 +187,7 @@ server.tool(
       return ok({
         status: "logged_in",
         access_token: result.access_token,
-        next_step: "Use create_api_key if you need an API key, or get_balance to check the balance.",
+        next_step: "Use get_balance to check the balance, get_deposit_address to top up, then buy_energy. create_api_key issues a key once the account's top-ups total 100 TRX.",
       });
     } catch (e) {
       return errorResult(e);
@@ -192,7 +198,7 @@ server.tool(
 // 4a. verify_email_code
 server.tool(
   "verify_email_code",
-  "Finish registration with the 6-digit code from the confirmation email (sent by register). Creates the account with the password given to register and signs in. Ask the user for the code — do not guess: each address allows only 5 attempts per code. After success, proceed to create_api_key.",
+  "Finish registration with the 6-digit code from the confirmation email (sent by register). Creates the account with the password given to register and signs in. Ask the user for the code — do not guess: each address allows only 5 attempts per code. After success, proceed to get_deposit_address.",
   {
     email: z.string().email().describe("The same email that was passed to register"),
     code: z.string().regex(/^\d{6}$/).describe("6-digit code from the email"),
@@ -218,7 +224,7 @@ server.tool(
       return ok({
         status: result.is_new ? "registered" : "logged_in",
         access_token: result.access_token,
-        next_step: "Email confirmed. Call create_api_key to generate an API key, then get_deposit_address to get the deposit address for funding.",
+        next_step: `Email confirmed. ${NEXT_AFTER_SIGN_UP}`,
       });
     } catch (e) {
       return errorResult(e);
@@ -248,10 +254,26 @@ server.tool(
   }
 );
 
+// A new key waits for the account's top-ups to reach the bar (backend T-065):
+// 403 API_KEY_DEPOSIT_REQUIRED with required_trx and missing_trx. Nothing else
+// is blocked — the sign-in token keeps working — so say so instead of a bare error.
+function depositRequiredResult(e: APIError) {
+  const required = e.details.required_trx as string | undefined;
+  const missing = e.details.missing_trx as string | undefined;
+  const text = JSON.stringify({
+    status: "deposit_required",
+    required_trx: required ?? null,
+    missing_trx: missing ?? null,
+    explanation: `No API key yet: TronRental issues API keys once the account's top-ups total ${required ?? "the required amount of"} TRX${missing ? ` — ${missing} TRX more to go` : ""}. A USDT top-up counts at the TRX amount it was credited as.`,
+    next_step: "Nothing else is blocked: get_deposit_address, get_balance, buy_energy and get_order work with the sign-in token from verify_email_code or login (valid 1 hour; call login again when it expires). If the user wants a key that keeps working after this session, tell them how much more to top up (get_deposit_address), then call create_api_key again.",
+  }, null, 2);
+  return { content: [{ type: "text" as const, text }], isError: true };
+}
+
 // 5. create_api_key
 server.tool(
   "create_api_key",
-  "Create an API key for authenticated operations. Requires a valid access token from verify_email_code or login. The key is shown only once — tell the user to save it. After creating, proceed to get_deposit_address.",
+  "Create an API key that keeps access after this session (the user sets it as TRONRENTAL_API_KEY). Requires a valid access token from verify_email_code or login. TronRental issues a key only once the account's top-ups total 100 TRX; below that the call reports how much more to top up. Buying does not need a key: get_deposit_address, get_balance, buy_energy and get_order work with the sign-in token. The key is shown only once — tell the user to save it.",
   {
     name: z.string().default("mcp-key").describe("Name for the API key"),
   },
@@ -261,9 +283,12 @@ server.tool(
       return ok({
         api_key: result.key,
         key_id: result.id,
-        next_step: "Key created. To persist it, the user should set TRONRENTAL_API_KEY in their MCP config. Now call get_deposit_address to get the TRX deposit address.",
+        next_step: "Key created. To persist it, the user should set TRONRENTAL_API_KEY in their MCP config. Continue with get_balance and buy_energy.",
       });
     } catch (e) {
+      if (e instanceof APIError && e.code === "API_KEY_DEPOSIT_REQUIRED") {
+        return depositRequiredResult(e);
+      }
       return errorResult(e);
     }
   }
@@ -272,7 +297,7 @@ server.tool(
 // 6. get_deposit_address
 server.tool(
   "get_deposit_address",
-  "Get the TRX/USDT deposit address for funding the TronRental balance. Show this address to the user and ask them to send TRX. After they send, use get_balance to verify.",
+  "Get the TRX/USDT deposit address for funding the TronRental balance. Works with the sign-in token from verify_email_code or login, or with an API key. Show this address to the user and ask them to send TRX or USDT. After they send, use get_balance to verify.",
   {},
   async () => {
     try {

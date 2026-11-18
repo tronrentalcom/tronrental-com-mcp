@@ -48,7 +48,10 @@ export class TronRentalAPI {
           ? detail
           : detail?.error?.message ?? detail?.message ?? JSON.stringify(detail);
       const errorCode = detail?.error?.code ?? "";
-      throw new APIError(resp.status, errorCode, errorMsg);
+      // Extra fields next to code/message (e.g. required_trx, missing_trx).
+      const details =
+        detail?.error && typeof detail.error === "object" ? detail.error : {};
+      throw new APIError(resp.status, errorCode, errorMsg, details);
     }
 
     return data as T;
@@ -159,7 +162,8 @@ export class APIError extends Error {
   constructor(
     public status: number,
     public code: string,
-    message: string
+    message: string,
+    public details: Record<string, unknown> = {}
   ) {
     super(message);
     this.name = "APIError";

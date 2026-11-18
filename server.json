@@ -6,18 +6,18 @@
     "url": "https://github.com/tronrentalcom/tronrental-com-mcp",
     "source": "github"
   },
-  "version": "1.0.7",
+  "version": "1.0.8",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@tronrental-com/mcp-server",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
-          "description": "TronRental API key (optional — without it the agent registers via tools; the user confirms their email with a 6-digit code)",
+          "description": "TronRental API key (optional — without it the agent registers via tools and works with the sign-in token; the user confirms their email with a 6-digit code; a key is issued once top-ups total 100 TRX)",
           "isRequired": false,
           "format": "string",
           "isSecret": true,

@@ -53,12 +53,12 @@ Add to `claude_desktop_config.json`:
 | `verify_email_code` | Confirm the code and create the account | No |
 | `resend_email_code` | Mail a new code (expired or not received) | No |
 | `login` | Log in to existing account | No |
-| `create_api_key` | Generate API key | Token |
-| `get_deposit_address` | Get TRX deposit address | API key |
-| `get_balance` | Check account balance | API key |
-| `buy_energy` | Purchase energy for a TRON address | API key |
-| `get_order` | Check order status | API key |
-| `regenerate_deposit_address` | Generate new deposit address | API key |
+| `create_api_key` | Generate API key (after top-ups of 100 TRX in total) | Token |
+| `get_deposit_address` | Get TRX deposit address | API key or token |
+| `get_balance` | Check account balance | API key or token |
+| `buy_energy` | Purchase energy for a TRON address | API key or token |
+| `get_order` | Check order status | API key or token |
+| `regenerate_deposit_address` | Generate new deposit address | API key or token |
 
 ## Typical Flow
 
@@ -67,12 +67,14 @@ Add to `claude_desktop_config.json`:
 3. `register` — the user's real email + password; a 6-digit code goes to that inbox
 4. The user reads the code from the email and gives it to the agent
 5. `verify_email_code` — creates the account and signs in
-6. `create_api_key` — get API key
-7. `get_deposit_address` — get address to fund account
-8. Send TRX to the deposit address
-9. `get_balance` — verify deposit arrived
-10. `buy_energy` — purchase energy for target address
-11. `get_order` — confirm delegation
+6. `get_deposit_address` — get address to fund account
+7. Send TRX or USDT to the deposit address
+8. `get_balance` — verify deposit arrived
+9. `buy_energy` — purchase energy for target address
+10. `get_order` — confirm delegation
+11. `create_api_key` — once the account's top-ups total 100 TRX: a key keeps access after the session (set it as `TRONRENTAL_API_KEY`)
+
+Until a key exists, the tools use the sign-in token from `verify_email_code` or `login`; it is valid for 1 hour, after that call `login` again. Below 100 TRX of top-ups, `create_api_key` reports how much more to top up (`API_KEY_DEPOSIT_REQUIRED`).
 
 ## Energy Amounts
 
