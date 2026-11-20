@@ -16,6 +16,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test src/*.test.ts",
+    "prepublishOnly": "node ../../scripts/prepublish.mjs",
     "dev": "tsx src/main.ts"
   },
   "keywords": ["tron", "energy", "bandwidth", "tronrental", "usdt", "cli", "mcp"],

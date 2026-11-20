@@ -42,6 +42,45 @@ npm test
 
 Node 20 or newer. Every pull request runs the same steps in CI.
 
+## Publishing
+
+A version on npm can never be published again, so publish only from a fresh clone of `main`:
+
+```bash
+git clone https://github.com/tronrentalcom/tronrental-com-mcp.git && cd tronrental-com-mcp
+# or, in an existing clone: git checkout main && git pull
+npm ci
+```
+
+Look at each tarball before uploading it:
+
+```bash
+npm pack --dry-run --workspace packages/mcp-server
+npm pack --dry-run --workspace packages/cli
+```
+
+In the output check:
+
+- `name` and `version` — the package and the version you mean to publish (`@tronrental-com/mcp-server` 2.x, `@tronrental-com/cli` 1.x);
+- the file list — `README.md`, `package.json` and `dist/*.js` only; the bin is there (`dist/index.js` for the bridge, `dist/main.js` for the CLI); no `src/`, no `*.test.js`, no `.env`;
+- `total files` — 6 for the bridge, 9 for the CLI as of 2.0.0 / 1.0.0; a much smaller number means an empty or stale `dist`.
+
+Then publish:
+
+```bash
+npm publish --workspace packages/mcp-server --access public
+npm publish --workspace packages/cli --access public
+```
+
+`npm publish` first runs the guard `scripts/prepublish.mjs` (`prepublishOnly`), and stops before uploading if any check fails:
+
+- the checkout is a clean `main` equal to `origin/main`;
+- `dist` is deleted and built again, and the tests pass;
+- the built CLI's `--version` and the bridge's `serverInfo.version` equal `version` in package.json, and `server.json` names the same version;
+- the tarball holds the bin files and no compiled tests.
+
+After the bridge is on npm, publish `server.json` to the MCP Registry with `mcp-publisher publish`.
+
 ## Links
 
 - [TronRental.com](https://tronrental.com)
