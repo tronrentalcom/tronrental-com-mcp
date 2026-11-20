@@ -1,92 +1,51 @@
-# TronRental MCP Server
+# TronRental for agents and the command line
 
-MCP (Model Context Protocol) server for [TronRental.com](https://tronrental.com) — buy TRON energy to reduce USDT transfer fees by up to 80%.
+[TronRental.com](https://tronrental.com) rents TRON energy and bandwidth so that USDT (TRC-20) transfers cost a fraction of the TRX they would burn. This repository holds the tools that reach it from outside the website:
 
-## What it does
+| Package | What it is |
+|---|---|
+| [`@tronrental-com/cli`](packages/cli) | `tronrental` — the command line: sign in, quote, buy, check orders, withdraw |
+| [`@tronrental-com/mcp-server`](packages/mcp-server) | stdio MCP bridge for agents whose client speaks only stdio |
 
-Without energy, each USDT (TRC-20) transfer costs ~6.4 TRX in burned fees.
-With TronRental energy, the same transfer costs ~1.8 TRX — **saving 72%**.
+Both talk to the TronRental remote MCP server, `https://mcp.tronrental.com/mcp`. Its tool catalog comes from the server on every connection: neither package keeps a copy of it.
 
-This MCP server lets AI agents (Claude Code, Cursor, Windsurf) interact with the TronRental API to register, fund an account, and purchase energy — all from a single prompt.
+## Which one do I need?
 
-Registering a new account needs the user's real email: TronRental mails a 6-digit code there, and the account is created only after the agent passes that code to `verify_email_code`. The agent asks the user for the code — it is the only manual step.
+- **An agent whose client supports remote MCP** (Claude, ChatGPT, Claude Code, Codex, Cursor): connect it to `https://mcp.tronrental.com/mcp` directly. You sign in with TronRental in the browser and choose what the agent may do; there is no key to copy.
 
-## Quick Start
+  ```bash
+  claude mcp add --transport http tronrental https://mcp.tronrental.com/mcp
+  ```
 
-### Claude Code
+- **A terminal, a script or CI:** the CLI.
+
+  ```bash
+  npm install -g @tronrental-com/cli
+  tronrental login
+  tronrental quote --amount 65000
+  ```
+
+- **An agent client that speaks only stdio:** the bridge, with an API key.
+
+  ```bash
+  claude mcp add tronrental -e TRONRENTAL_API_KEY=your_key -- npx -y @tronrental-com/mcp-server@2.0.0
+  ```
+
+## Development
 
 ```bash
-claude mcp add tronrental -- npx -y @tronrental-com/mcp-server
+npm ci
+npm run typecheck
+npm run build
+npm test
 ```
 
-### With API key (skip registration)
-
-```bash
-claude mcp add tronrental -e TRONRENTAL_API_KEY=your_key -- npx -y @tronrental-com/mcp-server
-```
-
-### Claude Desktop
-
-Add to `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "tronrental": {
-      "command": "npx",
-      "args": ["-y", "@tronrental-com/mcp-server"],
-      "env": {
-        "TRONRENTAL_API_KEY": "your_key_here"
-      }
-    }
-  }
-}
-```
-
-## Tools
-
-| Tool | Description | Auth |
-|------|-------------|------|
-| `get_prices` | Current energy & bandwidth prices | No |
-| `calculate_savings` | Savings calculator (burn vs rental) | No |
-| `register` | Start registration — mails a 6-digit code to the user's email | No |
-| `verify_email_code` | Confirm the code and create the account | No |
-| `resend_email_code` | Mail a new code (expired or not received) | No |
-| `login` | Log in to existing account | No |
-| `create_api_key` | Generate API key | Token |
-| `get_deposit_address` | Get TRX deposit address | API key |
-| `get_balance` | Check account balance | API key |
-| `buy_energy` | Purchase energy for a TRON address | API key |
-| `get_order` | Check order status | API key |
-| `regenerate_deposit_address` | Generate new deposit address | API key |
-
-## Typical Flow
-
-1. `get_prices` — check current pricing
-2. `calculate_savings` — see how much you save
-3. `register` — the user's real email + password; a 6-digit code goes to that inbox
-4. The user reads the code from the email and gives it to the agent
-5. `verify_email_code` — creates the account and signs in
-6. `create_api_key` — get API key
-7. `get_deposit_address` — get address to fund account
-8. Send TRX to the deposit address
-9. `get_balance` — verify deposit arrived
-10. `buy_energy` — purchase energy for target address
-11. `get_order` — confirm delegation
-
-## Energy Amounts
-
-| Scenario | Energy Needed |
-|----------|--------------|
-| Recipient **has** USDT | 65,000 |
-| Recipient **has no** USDT | 131,000 |
-
-Minimum: 1. Maximum: 5,000,000. Duration: 1 hour. Orders under 32,000 are served from TronRental's own pool; `POOL_EXHAUSTED` means nothing was charged.
+Node 20 or newer. Every pull request runs the same steps in CI.
 
 ## Links
 
 - [TronRental.com](https://tronrental.com)
-- [API Documentation](https://docs.tronrental.com)
+- [API documentation](https://docs.tronrental.com)
 - [Dashboard](https://tronrental.com/dashboard)
 
 ## License

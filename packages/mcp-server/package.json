@@ -1,0 +1,40 @@
+{
+  "name": "@tronrental-com/mcp-server",
+  "version": "2.0.0",
+  "description": "MCP stdio bridge to the TronRental remote MCP server — rent TRON energy and bandwidth from AI agents",
+  "mcpName": "io.github.tronrental-com/tronrental",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tronrentalcom/tronrental-com-mcp.git",
+    "directory": "packages/mcp-server"
+  },
+  "homepage": "https://tronrental.com/developers",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "tronrental-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test src/*.test.ts",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "keywords": ["mcp", "tron", "energy", "bandwidth", "tronrental", "usdt", "model-context-protocol"],
+  "author": "TronRental <dev@tronrental.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": ["dist"]
+}
