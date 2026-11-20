@@ -15,10 +15,10 @@ tronrental balance
 ```bash
 tronrental login        # opens the TronRental sign-in page; you choose what the CLI may do
 tronrental status       # which server and credentials are in use
-tronrental logout       # revokes the sign-in and forgets it
+tronrental logout       # revokes this machine's tokens and forgets them
 ```
 
-The CLI appears as «TronRental CLI» in your account's connected apps. The tokens are kept in the OS keychain: macOS Keychain, Windows Credential Manager or the Linux Secret Service. On a machine without a keychain they go to `~/.config/tronrental/credentials.json`, readable only by you.
+The CLI appears as «TronRental CLI» in your account's connected apps; removing it there cuts every machine signed in with it. The tokens are kept in the OS keychain: macOS Keychain, Windows Credential Manager or the Linux Secret Service. On a machine without a keychain they go to `~/.config/tronrental/credentials.json`, readable only by you.
 
 **With an API key** — for servers and CI. Create one at tronrental.com → API.
 

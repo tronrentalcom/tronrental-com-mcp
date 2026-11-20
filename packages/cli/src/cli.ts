@@ -74,7 +74,7 @@ const HELP = `tronrental ${VERSION} — TronRental from the command line: rent T
 
 Usage:
   tronrental login                 sign in in the browser (tokens go to the OS keychain)
-  tronrental logout                revoke the sign-in and forget it
+  tronrental logout                revoke this machine's tokens and forget them
   tronrental status                which server and credentials are in use
   tronrental tools                 every command your credentials allow
   tronrental <command> --help      a command's flags
@@ -335,7 +335,11 @@ export async function main(argv: string[], io: Io): Promise<number> {
           io.stderr("Forgotten on this machine, but the server did not confirm the revocation: remove «TronRental CLI» in your account's connected apps on tronrental.com.");
           return 1;
         }
-        io.stderr(outcome === "revoked" ? "Signed out: the sign-in is revoked and forgotten." : "Not signed in: nothing to sign out of.");
+        io.stderr(
+          outcome === "revoked"
+            ? "Signed out: this machine's tokens are revoked and forgotten. «TronRental CLI» stays in your account's connected apps until you remove it there."
+            : "Not signed in: nothing to sign out of.",
+        );
         return 0;
       }
       case "status": {
