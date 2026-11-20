@@ -36,17 +36,25 @@ export class StoredOAuthProvider implements OAuthClientProvider {
     throw new CliError("The sign-in has expired or was revoked: run `tronrental login` again.");
   };
 
+  /** Login's choice of client; undefined for other commands: the stored client, whichever it is. */
+  private registerClient: boolean | undefined;
+
   constructor(
     private store: SessionStore,
     private server: string,
     private session: Session,
-    { registerClient = false }: { registerClient?: boolean } = {},
+    { registerClient }: { registerClient?: boolean } = {},
   ) {
-    this.clientMetadataUrl = registerClient ? undefined : CLIENT_METADATA_URL;
+    this.registerClient = registerClient;
+    const dcr = registerClient ?? (session.clientInformation !== undefined && session.clientInformation.client_id !== CLIENT_METADATA_URL);
+    this.clientMetadataUrl = dcr ? undefined : CLIENT_METADATA_URL;
   }
 
-  get redirectUrl(): string | undefined {
-    return this.redirectUri;
+  // Always a redirect URL: without one the SDK takes this for a non-interactive client and,
+  // on a 401, asks for a token without a code instead of refreshing. Outside `login` it is
+  // never visited — a sign-in that cannot be refreshed ends in onRedirect's error.
+  get redirectUrl(): string {
+    return this.redirectUri ?? "http://127.0.0.1/callback";
   }
 
   get clientMetadata(): OAuthClientMetadata {
@@ -75,8 +83,10 @@ export class StoredOAuthProvider implements OAuthClientProvider {
 
   clientInformation(): OAuthClientInformationMixed | undefined {
     const info = this.session.clientInformation;
-    // A client from the other way of signing in (DCR vs the metadata document) is not reused.
-    if (info && (info.client_id === CLIENT_METADATA_URL) !== (this.clientMetadataUrl !== undefined)) return undefined;
+    // At login, a client from the other way of signing in (DCR vs the metadata document) is not reused.
+    if (info && this.registerClient !== undefined && (info.client_id === CLIENT_METADATA_URL) === this.registerClient) {
+      return undefined;
+    }
     return info;
   }
   async saveClientInformation(info: OAuthClientInformationMixed): Promise<void> {
@@ -90,6 +100,11 @@ export class StoredOAuthProvider implements OAuthClientProvider {
     this.session.tokens = tokens;
     await this.persist();
   }
+  /** What the authorization server promised in its metadata (RFC 8414), once discovered. */
+  serverMetadata(): { issuer?: string; authorization_response_iss_parameter_supported?: boolean } {
+    return (this.discoveryState()?.authorizationServerMetadata ?? {}) as { issuer?: string; authorization_response_iss_parameter_supported?: boolean };
+  }
+
   discoveryState(): OAuthDiscoveryState | undefined {
     return this.session.discoveryState as OAuthDiscoveryState | undefined;
   }
@@ -156,11 +171,14 @@ function listenForCallback(provider: StoredOAuthProvider, issuer: string): Promi
         fail(new CliError("Sign-in failed: the callback's state does not match."));
         return;
       }
-      // RFC 9207: the code must come from the server we started at (mix-up defence).
+      // RFC 9207: the code must come from the server we started at (mix-up defence),
+      // and a server that promises `iss` must send it.
       const iss = params.get("iss");
-      if (iss !== null && iss !== issuer) {
-        page("Sign-in failed", "The answer came from another server.");
-        fail(new CliError(`Sign-in failed: the callback is from ${iss}, not ${issuer}.`));
+      const metadata = provider.serverMetadata();
+      const expected = metadata.issuer ?? issuer;
+      if (iss === null ? metadata.authorization_response_iss_parameter_supported === true : iss !== expected) {
+        page("Sign-in failed", "The answer did not come from the server this sign-in started at.");
+        fail(new CliError(`Sign-in failed: the callback's iss is ${iss ?? "missing"}, expected ${expected}.`));
         return;
       }
       const error = params.get("error");
@@ -219,14 +237,14 @@ export async function login(store: SessionStore, serverUrl: string, options: Log
 }
 
 /** Revoke the refresh token (and with it the grant's access) and forget the session. */
-export async function logout(store: SessionStore, serverUrl: string): Promise<boolean> {
+export async function logout(store: SessionStore, serverUrl: string): Promise<"revoked" | "failed" | "nothing"> {
   const session = await store.load(serverUrl);
   const token = session.tokens?.refresh_token ?? session.tokens?.access_token;
   const metadata = (session.discoveryState as OAuthDiscoveryState | undefined)?.authorizationServerMetadata as
     | { revocation_endpoint?: string }
     | undefined;
   const clientId = session.clientInformation?.client_id;
-  let revoked = false;
+  let outcome: "revoked" | "failed" | "nothing" = "nothing";
   if (token && metadata?.revocation_endpoint && clientId) {
     const body = new URLSearchParams({ token, client_id: clientId });
     if (session.tokens?.refresh_token) body.set("token_type_hint", "refresh_token");
@@ -236,11 +254,13 @@ export async function logout(store: SessionStore, serverUrl: string): Promise<bo
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body,
       });
-      revoked = resp.ok;
+      outcome = resp.ok ? "revoked" : "failed";
     } catch {
-      revoked = false;
+      outcome = "failed";
     }
+  } else if (token) {
+    outcome = "failed";
   }
   await store.remove(serverUrl);
-  return revoked;
+  return outcome;
 }

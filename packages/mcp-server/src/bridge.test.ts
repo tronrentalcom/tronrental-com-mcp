@@ -8,7 +8,9 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
   CallToolRequestSchema,
+  ErrorCode,
   ListToolsRequestSchema,
+  McpError,
   ToolListChangedNotificationSchema,
   type Tool,
 } from "@modelcontextprotocol/sdk/types.js";
@@ -50,6 +52,7 @@ before(async () => {
     const server = new Server({ name: "remote", version: "1" }, { capabilities: { tools: {} }, instructions: "remote instructions" });
     server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: REMOTE_TOOLS }));
     server.setRequestHandler(CallToolRequestSchema, async (r) => {
+      if (r.params.name === "no_such_tool") throw new McpError(ErrorCode.InvalidParams, "Unknown tool: no_such_tool");
       seen.calls.push(r.params);
       return { content: [{ type: "text", text: '{"order_id":7}' }], structuredContent: { order_id: 7 } };
     });
@@ -109,6 +112,17 @@ describe("with an API key", () => {
     assert.equal(seen.headers["x-api-key"], GOOD_KEY);
     assert.equal(seen.headers["x-account-id"], "42");
     assert.match(String(seen.headers["user-agent"]), /^tronrental-mcp\/2\./);
+    await bridge.close();
+  });
+
+  test("the server's protocol error comes through as it is, and the session keeps working", async () => {
+    const bridge = new Bridge({ apiKey: GOOD_KEY, mcpUrl, apiUrl: API_URL });
+    const { client } = await connect(bridge);
+    const result = await client.callTool({ name: "no_such_tool", arguments: {} });
+    assert.equal(result.isError, true);
+    assert.match(text(result), /Unknown tool: no_such_tool/);
+    assert.doesNotMatch(text(result), /Could not reach|may have reached/);
+    assert.equal((await client.callTool({ name: "buy_energy", arguments: {} })).isError, undefined);
     await bridge.close();
   });
 

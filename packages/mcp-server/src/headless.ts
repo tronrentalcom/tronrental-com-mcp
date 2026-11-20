@@ -218,12 +218,19 @@ export class Headless {
           return ok(await this.rest.getBalance());
         case "create_api_key": {
           const result = await this.rest.createApiKey(str(args.name) ?? "mcp-key");
-          await this.onApiKey(result.key);
+          // The key is shown only once: whatever happens to the switch, it goes back to the agent.
+          let switched = true;
+          try {
+            await this.onApiKey(result.key);
+          } catch {
+            switched = false;
+          }
           return ok({
             api_key: result.key,
             key_id: result.id,
-            next_step:
-              "Key created and in use for this session: the full TronRental tool set is now available. The key is shown only once — tell the user to save it as TRONRENTAL_API_KEY in their MCP config.",
+            next_step: switched
+              ? "Key created and in use for this session: the full TronRental tool set is now available. The key is shown only once — tell the user to save it as TRONRENTAL_API_KEY in their MCP config."
+              : "Key created. The key is shown only once — tell the user to save it as TRONRENTAL_API_KEY in their MCP config and restart this MCP server to get the full TronRental tool set.",
           });
         }
         default:

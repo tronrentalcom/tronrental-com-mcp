@@ -134,6 +134,7 @@ export function toolArguments(tool: Tool, flags: Map<string, (string | true)[]>,
       throw new CliError("--input: not valid JSON", 2);
     }
   }
+  const given = new Map<string, string>();
   for (const [flag, values] of flags) {
     let prop = byFlag.get(flag) ?? (properties[flag] ? flag : undefined);
     if (!prop && SYNONYMS[flag]) prop = SYNONYMS[flag].find((p) => p in properties);
@@ -141,15 +142,16 @@ export function toolArguments(tool: Tool, flags: Map<string, (string | true)[]>,
       const known = [...byFlag.keys()].map((f) => `--${f}`).join(", ") || "none";
       throw new CliError(`Unknown flag --${flag} for ${commandName(tool.name)}. Its flags: ${known}`, 2);
     }
+    // `--amount` and `--volume` both name `volume`: two values for one argument is a mistake, not a choice.
+    if (given.has(prop)) throw new CliError(`--${flag} is given more than once (also as --${given.get(prop)})`, 2);
+    given.set(prop, flag);
     const schema = properties[prop];
     if (types(schema).includes("array")) {
       const items = schema.items ?? {};
       args[prop] = values.flatMap((v) => {
-        const parsed = coerce(prop!, schema, v);
-        if (Array.isArray(parsed)) return parsed;
-        return String(v)
-          .split(",")
-          .map((part) => coerce(prop!, items, part.trim()));
+        if (v === true) throw new CliError(`--${flagName(prop!)} needs a value`, 2);
+        if (v.trimStart().startsWith("[")) return coerce(prop!, schema, v) as unknown[];
+        return v.split(",").map((part) => coerce(prop!, items, part.trim()));
       });
     } else {
       if (values.length > 1) throw new CliError(`--${flagName(prop)} is given more than once`, 2);

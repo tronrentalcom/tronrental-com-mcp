@@ -51,7 +51,7 @@ let base: string;
 let mcpUrl: string;
 let calls: { name: string; arguments: Record<string, unknown> }[] = [];
 let lastHeaders: IncomingMessage["headers"] = {};
-const oauth = { challenge: "", verifierOk: false, clientId: "", revoked: [] as string[], scope: "" };
+const oauth = { challenge: "", verifierOk: false, clientId: "", revoked: [] as string[], refreshed: [] as string[], scope: "", dropIss: false };
 
 async function body(req: IncomingMessage): Promise<string> {
   let data = "";
@@ -77,6 +77,7 @@ before(async () => {
         code_challenge_methods_supported: ["S256"],
         token_endpoint_auth_methods_supported: ["none"],
         client_id_metadata_document_supported: true,
+        authorization_response_iss_parameter_supported: true,
       });
     }
     if (url.pathname === "/oauth/authorize") {
@@ -86,18 +87,23 @@ before(async () => {
       const back = new URL(url.searchParams.get("redirect_uri")!);
       back.searchParams.set("code", "the-code");
       back.searchParams.set("state", url.searchParams.get("state") ?? "");
-      back.searchParams.set("iss", base);
+      if (!oauth.dropIss) back.searchParams.set("iss", base);
       return res.writeHead(302, { Location: back.href }).end();
     }
     if (url.pathname === "/oauth/token") {
       const form = new URLSearchParams(await body(req));
+      if (form.get("grant_type") === "refresh_token") {
+        oauth.refreshed.push(form.get("refresh_token") ?? "");
+        return json(200, { access_token: "oauth-access", refresh_token: "oauth-refresh-2", token_type: "Bearer", expires_in: 3600 });
+      }
       const digest = createHash("sha256").update(form.get("code_verifier") ?? "").digest("base64url");
       oauth.verifierOk = form.get("code") === "the-code" && digest === oauth.challenge && form.get("client_id") === CLIENT_METADATA_URL;
       return json(200, { access_token: "oauth-access", refresh_token: "oauth-refresh", token_type: "Bearer", expires_in: 3600 });
     }
     if (url.pathname === "/oauth/revoke") {
-      oauth.revoked.push(new URLSearchParams(await body(req)).get("token") ?? "");
-      return json(200, {});
+      const token = new URLSearchParams(await body(req)).get("token") ?? "";
+      oauth.revoked.push(token);
+      return token === "revoke-fails" ? json(503, {}) : json(200, {});
     }
     // The MCP endpoint.
     const key = req.headers["x-api-key"];
@@ -188,6 +194,16 @@ describe("flags from the schema", () => {
   test("an integer flag refuses a fraction and an unknown flag names the real ones", () => {
     assert.throws(() => toolArguments(buy, parseArgv(["--volume", "6.5"]).flags), /expected integer/);
     assert.throws(() => toolArguments(buy, parseArgv(["--colour", "red"]).flags), /Unknown flag --colour.*--target-address/);
+  });
+
+  test("an array flag takes commas, repeats or JSON", () => {
+    const many = { name: "t", inputSchema: obj({ addrs: { type: "array", items: { type: "string" } }, ids: { type: "array", items: { type: "integer" } } }) } as Tool;
+    assert.deepEqual(toolArguments(many, parseArgv(["--addrs", "A,B", "--addrs", "C", "--ids", "1,2"]).flags), { addrs: ["A", "B", "C"], ids: [1, 2] });
+    assert.deepEqual(toolArguments(many, parseArgv(["--ids", "[3,4]"]).flags), { ids: [3, 4] });
+  });
+
+  test("a friendly flag and the real one for the same argument is refused, not one silently winning", () => {
+    assert.throws(() => toolArguments(buy, parseArgv(["--amount", "65000", "--volume", "650000"]).flags), /--volume is given more than once/);
   });
 
   test("global flags are not tool arguments", () => {
@@ -319,6 +335,17 @@ describe("login", () => {
     assert.equal(store.sessions.has(mcpUrl), false);
   });
 
+  test("logout says so when the server did not confirm the revocation", async () => {
+    const store = new MemoryStore();
+    await run(["login"], io({ openUrl: (u) => void openUrl(store)(u) }, store));
+    const session = await store.load(mcpUrl);
+    session.tokens!.refresh_token = "revoke-fails";
+    await store.save(mcpUrl, session);
+    const t = io({}, store);
+    assert.equal(await run(["logout"], t), 1);
+    assert.match(t.err.join("\n"), /did not confirm the revocation/);
+  });
+
   test("an API key in the environment wins over a stored sign-in", async () => {
     const store = new MemoryStore();
     await store.save(mcpUrl, { tokens: { access_token: "oauth-access", token_type: "Bearer" } });
@@ -327,9 +354,38 @@ describe("login", () => {
     assert.equal(lastHeaders.authorization, undefined);
   });
 
-  test("a DCR client from --register-client is not reused as the published client", () => {
+  test("an expired access token is refreshed, not a failure an hour after login", async () => {
+    const store = new MemoryStore();
+    await store.save(mcpUrl, { tokens: { access_token: "stale", refresh_token: "oauth-refresh", token_type: "Bearer" }, clientInformation: { client_id: CLIENT_METADATA_URL } });
+    const t = io({}, store);
+    assert.equal(await run(["balance"], t), 0, t.err.join("\n"));
+    assert.deepEqual(oauth.refreshed.slice(-1), ["oauth-refresh"]);
+    assert.equal(store.sessions.get(mcpUrl)?.tokens?.refresh_token, "oauth-refresh-2");
+  });
+
+  test("a stored DCR client keeps working for commands after login --register-client", async () => {
+    const store = new MemoryStore();
+    await store.save(mcpUrl, { tokens: { access_token: "stale", refresh_token: "oauth-refresh", token_type: "Bearer" }, clientInformation: { client_id: "trc_dcr" } });
+    assert.equal(await run(["balance"], io({}, store)), 0);
+    assert.equal(store.sessions.get(mcpUrl)?.clientInformation?.client_id, "trc_dcr");
+  });
+
+  test("a callback without iss is refused when the server promises it (RFC 9207)", async () => {
+    const store = new MemoryStore();
+    oauth.dropIss = true;
+    try {
+      const t = io({ openUrl: (u) => void openUrl(store)(u) }, store);
+      assert.equal(await run(["login"], t), 1);
+      assert.match(t.err.join("\n"), /iss/);
+      assert.equal(store.sessions.get(mcpUrl)?.tokens, undefined);
+    } finally {
+      oauth.dropIss = false;
+    }
+  });
+
+  test("login picks its client: a stored DCR one is not reused as the published client", () => {
     const session: Session = { clientInformation: { client_id: "trc_dcr" } };
-    assert.equal(new StoredOAuthProvider(new MemoryStore(), mcpUrl, session).clientInformation(), undefined);
+    assert.equal(new StoredOAuthProvider(new MemoryStore(), mcpUrl, session, { registerClient: false }).clientInformation(), undefined);
     assert.equal(new StoredOAuthProvider(new MemoryStore(), mcpUrl, session, { registerClient: true }).clientInformation()?.client_id, "trc_dcr");
   });
 });

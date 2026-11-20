@@ -8,7 +8,7 @@ import { createInterface } from "node:readline/promises";
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { CallToolResult, Tool } from "@modelcontextprotocol/sdk/types.js";
+import { ErrorCode, McpError, type CallToolResult, type Tool } from "@modelcontextprotocol/sdk/types.js";
 import { commandHelp, commandName, missingRequired, parseArgv, toolArguments, type GlobalFlags } from "./args.js";
 import { CliError, StoredOAuthProvider, login, logout } from "./oauth.js";
 import { errorData, human, resultData } from "./output.js";
@@ -151,6 +151,18 @@ function connectionError(e: unknown, cred: Credential): Error {
   return new CliError(`Could not reach ${e instanceof Error ? e.message : String(e)}`);
 }
 
+/**
+ * A call that failed after it was sent: the server may have done it. A protocol error
+ * (the server answered with an error) is not that case.
+ */
+function sentButUnknown(e: unknown, tool: Tool, args: Record<string, unknown>): CliError {
+  const message = e instanceof Error ? e.message : String(e);
+  const answered = e instanceof McpError && e.code !== ErrorCode.RequestTimeout && e.code !== ErrorCode.ConnectionClosed;
+  if (answered || tool.annotations?.readOnlyHint) return new CliError(message);
+  const retry = args.idempotency_key ? ` To retry safely, repeat the command with --idempotency-key ${args.idempotency_key}.` : "";
+  return new CliError(`${message}\nThe request was sent and may have gone through: check (orders, balance) before running it again.${retry}`);
+}
+
 async function allTools(client: Client): Promise<Tool[]> {
   const tools: Tool[] = [];
   let cursor: string | undefined;
@@ -272,7 +284,12 @@ async function runTool(ctx: Context, word: string, positionals: string[], flags:
       return 0;
     }
 
-    const result = await call(client, name, args);
+    let result: CallToolResult;
+    try {
+      result = await call(client, name, args);
+    } catch (e) {
+      throw sentButUnknown(e, tool, args);
+    }
     if (result.isError) return fail(ctx, result);
     emit(ctx, resultData(result));
     return 0;
@@ -313,8 +330,12 @@ export async function main(argv: string[], io: Io): Promise<number> {
       }
       case "logout": {
         const store = await io.store();
-        const revoked = await logout(store, ctx.server);
-        io.stderr(revoked ? "Signed out: the sign-in is revoked and forgotten." : "Signed out on this machine (nothing to revoke on the server).");
+        const outcome = await logout(store, ctx.server);
+        if (outcome === "failed") {
+          io.stderr("Forgotten on this machine, but the server did not confirm the revocation: remove «TronRental CLI» in your account's connected apps on tronrental.com.");
+          return 1;
+        }
+        io.stderr(outcome === "revoked" ? "Signed out: the sign-in is revoked and forgotten." : "Not signed in: nothing to sign out of.");
         return 0;
       }
       case "status": {

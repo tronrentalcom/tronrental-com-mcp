@@ -10,7 +10,9 @@ import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontex
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   CallToolRequestSchema,
+  ErrorCode,
   ListToolsRequestSchema,
+  McpError,
   type CallToolResult,
   type Tool,
 } from "@modelcontextprotocol/sdk/types.js";
@@ -120,9 +122,18 @@ export class Bridge {
       const remote = await this.connect();
       return (await remote.callTool({ name, arguments: args })) as CallToolResult;
     } catch (e) {
+      // The server answered with a protocol error: the connection is fine and nothing was done.
+      if (e instanceof McpError && e.code !== ErrorCode.RequestTimeout && e.code !== ErrorCode.ConnectionClosed) {
+        return failure(`TronRental MCP server: ${e.message}`);
+      }
       // A dropped connection is re-opened on the next call.
       await this.closeRemote();
-      return failure(remoteErrorText(e));
+      const refused = e instanceof StreamableHTTPError && e.code !== undefined && e.code >= 400 && e.code < 500;
+      return failure(
+        refused
+          ? remoteErrorText(e)
+          : `${remoteErrorText(e)} The call may have reached TronRental: before repeating anything that spends, check (get_order, list_orders, get_balance) and retry with the same idempotency_key.`,
+      );
     }
   }
 
