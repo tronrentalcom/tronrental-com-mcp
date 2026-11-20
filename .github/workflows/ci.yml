@@ -26,6 +26,12 @@ jobs:
       - run: npm test
         env:
           TRONRENTAL_NO_KEYRING: "1"
+      - name: Publish guard (without the git check)
+        run: |
+          (cd packages/mcp-server && node ../../scripts/prepublish.mjs --no-git)
+          (cd packages/cli && node ../../scripts/prepublish.mjs --no-git)
+        env:
+          TRONRENTAL_NO_KEYRING: "1"
       - name: CLI and bridge start
         run: |
           node packages/cli/dist/main.js --version
