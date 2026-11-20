@@ -1,0 +1,37 @@
+{
+  "name": "@tronrental-com/cli",
+  "version": "1.0.0",
+  "description": "tronrental — command line for TronRental: rent TRON energy and bandwidth, check balances and orders",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tronrentalcom/tronrental-com-mcp.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://tronrental.com/developers",
+  "type": "module",
+  "bin": {
+    "tronrental": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test src/*.test.ts",
+    "dev": "tsx src/main.ts"
+  },
+  "keywords": ["tron", "energy", "bandwidth", "tronrental", "usdt", "cli", "mcp"],
+  "author": "TronRental <dev@tronrental.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@napi-rs/keyring": "^1.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": ["dist"]
+}

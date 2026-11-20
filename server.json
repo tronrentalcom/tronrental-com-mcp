@@ -1,27 +1,42 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.tronrental-com/tronrental",
-  "description": "Buy TRON energy to reduce USDT transfer fees by 80%. Full API for AI agents.",
+  "description": "Rent TRON energy and bandwidth so USDT transfers cost less TRX: quotes, orders, balance.",
   "repository": {
     "url": "https://github.com/tronrentalcom/tronrental-com-mcp",
-    "source": "github"
+    "source": "github",
+    "subfolder": "packages/mcp-server"
   },
-  "version": "1.0.7",
+  "websiteUrl": "https://tronrental.com/developers",
+  "version": "2.0.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.tronrental.com/mcp"
+    }
+  ],
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@tronrental-com/mcp-server",
-      "version": "1.0.7",
+      "version": "2.0.0",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
-          "description": "TronRental API key (optional — without it the agent registers via tools; the user confirms their email with a 6-digit code)",
+          "name": "TRONRENTAL_API_KEY",
+          "description": "TronRental API key (tronrental.com → API). Without it the agent can only sign up: the user confirms their email with a 6-digit code, tops up, and the key is issued.",
           "isRequired": false,
-          "format": "string",
           "isSecret": true,
-          "name": "TRONRENTAL_API_KEY"
+          "format": "string"
+        },
+        {
+          "name": "TRONRENTAL_ACCOUNT_ID",
+          "description": "Optional: a team account the key may act on.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
         }
       ]
     }
