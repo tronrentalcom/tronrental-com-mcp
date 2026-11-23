@@ -87,10 +87,12 @@ npm publish --workspace packages/cli --access public
 
 - the checkout is a clean `main` equal to `origin/main`;
 - `dist` is deleted and built again, and the tests pass;
-- the built CLI's `--version` and the bridge's `serverInfo.version` equal `version` in package.json, and `server.json` names the same version;
+- the built CLI's `--version` and the bridge's `serverInfo.version` equal `version` in package.json, and `server.json` names that version for the package (its own `version` may be higher);
 - the tarball holds the bin files and no compiled tests.
 
 After the bridge is on npm, publish `server.json` to the MCP Registry with `mcp-publisher publish`.
+
+A registry entry can never change. To update only the registry metadata (title, icons, links) without a new npm release, raise the server's `version` in `server.json` (e.g. 2.0.0 → 2.0.1) and keep `packages[].version` at the published npm version. The next npm release then needs a version above the server's.
 
 ## Links
 

@@ -1,14 +1,24 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.tronrental-com/tronrental",
+  "title": "TronRental",
   "description": "Rent TRON energy and bandwidth so USDT transfers cost less TRX: quotes, orders, balance.",
   "repository": {
     "url": "https://github.com/tronrentalcom/tronrental-com-mcp",
     "source": "github",
     "subfolder": "packages/mcp-server"
   },
-  "websiteUrl": "https://tronrental.com/developers",
-  "version": "2.0.0",
+  "websiteUrl": "https://tronrental.com/mcp",
+  "icons": [
+    {
+      "src": "https://tronrental.com/icon.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": [
+        "any"
+      ]
+    }
+  ],
+  "version": "2.0.1",
   "remotes": [
     {
       "type": "streamable-http",

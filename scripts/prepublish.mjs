@@ -7,7 +7,8 @@
  *   2. `dist` is deleted and built again from the sources;
  *   3. the package's tests pass;
  *   4. the built program reports the version in package.json (the CLI's --version,
- *      the bridge's serverInfo), and server.json names the same version;
+ *      the bridge's serverInfo), and server.json names it for the package (the server
+ *      version itself may be higher: a registry-only update);
  *   5. the tarball holds every `bin` file.
  *
  * Any failure exits non-zero and npm stops before uploading anything.
@@ -23,6 +24,15 @@ const root = resolve(pkgDir, "../..");
 const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
 const checkGit = !process.argv.includes("--no-git");
 const win = process.platform === "win32";
+
+/** Compare plain `x.y.z` versions; anything else compares as lower (the guard refuses it). */
+function compareVersions(a, b) {
+  const parse = (v) => (/^\d+\.\d+\.\d+$/.test(String(v)) ? String(v).split(".").map(Number) : null);
+  const [x, y] = [parse(a), parse(b)];
+  if (!x || !y) return -1;
+  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] - y[i];
+  return 0;
+}
 
 function fail(message) {
   console.error(`\nprepublish guard: ${message}\nNothing was published.`);
@@ -82,7 +92,9 @@ if (pkg.name === "@tronrental-com/cli") {
   if (said !== pkg.version) fail(`the bridge says ${said}, package.json says ${pkg.version} (src/bridge.ts VERSION)`);
   const server = JSON.parse(readFileSync(join(root, "server.json"), "utf8"));
   const entry = (server.packages ?? []).find((p) => p.identifier === pkg.name);
-  if (server.version !== pkg.version || entry?.version !== pkg.version) {
+  // The package entry names exactly this version. The server's own version may run ahead
+  // of it: a registry-only update (title, icons, links) needs a new, never-reused version.
+  if (entry?.version !== pkg.version || compareVersions(server.version, pkg.version) < 0) {
     fail(`server.json says ${server.version} / ${entry?.version}, package.json says ${pkg.version}`);
   }
 } else {
