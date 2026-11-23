@@ -1,0 +1,13 @@
+{
+  "name": "tronrental",
+  "description": "TronRental: TRON energy and bandwidth for cheaper transfers — the remote MCP server (sign in with TronRental) and task skills.",
+  "version": "0.1.0",
+  "author": {
+    "name": "TronRental",
+    "url": "https://tronrental.com"
+  },
+  "homepage": "https://tronrental.com/developers",
+  "repository": "https://github.com/tronrentalcom/tronrental-com-mcp",
+  "license": "MIT",
+  "privacyPolicyUrl": "https://tronrental.com/privacy"
+}
