@@ -31,6 +31,17 @@ Both talk to the TronRental remote MCP server, `https://mcp.tronrental.com/mcp`.
   claude mcp add tronrental -e TRONRENTAL_API_KEY=your_key -- npx -y @tronrental-com/mcp-server@2.0.0
   ```
 
+## Claude Code plugin
+
+This repository is also a Claude Code plugin marketplace. The `tronrental` plugin connects the remote MCP server and adds task skills: buying energy for a USDT transfer, keeping bandwidth on an address, energy auto-refill, Smart Mode for a hot wallet, transfer packages, invoices, a broadcaster node and Energy Resale.
+
+```bash
+claude plugin marketplace add tronrentalcom/tronrental-com-mcp
+claude plugin install tronrental@tronrental
+```
+
+Then `/mcp` → tronrental → Authenticate, and sign in with TronRental. The plugin's files: [`.claude-plugin/`](.claude-plugin), [`.mcp.json`](.mcp.json), [`skills/`](skills). Tool names in the skills follow the server's catalog: when a tool is renamed there, update the skills too.
+
 ## Development
 
 ```bash

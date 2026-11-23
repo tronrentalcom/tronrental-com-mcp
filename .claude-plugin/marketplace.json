@@ -1,0 +1,16 @@
+{
+  "name": "tronrental",
+  "owner": {
+    "name": "TronRental"
+  },
+  "metadata": {
+    "description": "TronRental for Claude Code: the remote MCP server and task skills for TRON energy and bandwidth."
+  },
+  "plugins": [
+    {
+      "name": "tronrental",
+      "source": "./",
+      "description": "Buy TRON energy and bandwidth, keep them topped up and accept payments, from Claude Code."
+    }
+  ]
+}

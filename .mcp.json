@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "tronrental": {
+      "type": "http",
+      "url": "https://mcp.tronrental.com/mcp"
+    }
+  }
+}
